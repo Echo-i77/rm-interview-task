@@ -1,5 +1,6 @@
 use clap::Parser;
 use reqwest::blocking::Client;
+use rm_client_sync::{make_echo_body, process_echo_line};
 use serde_json::{Value, json};
 use std::io::{self, Write};
 use std::time::Duration;
@@ -17,6 +18,26 @@ fn input(prompt: &str) -> io::Result<String> {
         return Err(io::ErrorKind::UnexpectedEof.into());
     }
     Ok(line.trim_end_matches(['\r', '\n']).to_owned())
+}
+fn input_lines(prompt: &str) -> io::Result<String> {
+    print!("{prompt}");
+    io::stdout().flush()?;
+
+    let mut result = String::new();
+
+    loop {
+        let mut line = String::new();
+
+        if io::stdin().read_line(&mut line)? == 0 {
+            return Err(io::ErrorKind::UnexpectedEof.into());
+        }
+
+        if process_echo_line(&mut result, &line) {
+            break;
+        }
+    }
+
+    Ok(result)
 }
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
@@ -51,8 +72,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     },
                 )
             }
-            "echo" | "delete-user" | "put" | "get" | "delete" => {
-                println!("This task is not implemented in the starting code yet.");
+            "echo" => {
+                let text = input_lines(
+                    "text (enter END on a new line to finish, use \\END for literal END):\n",
+                )?;
+                body = make_echo_body(&text);
+
+                ("POST", "/echo")
+            }
+            "delete-user" | "put" | "get" | "delete" => {
+                println!("This task is not implemented yet.");
                 continue;
             }
             _ => {
