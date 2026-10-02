@@ -80,6 +80,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 ("POST", "/echo".to_string())
             }
+            "put" => {
+                let name = input("name: ")?;
+                let text = input_lines("text (END to finish): ")?;
+
+                body = json!({
+                    "text": text
+                });
+
+                ("PUT", format!("/texts/{name}"))
+            }
             _ => {
                 println!("Unknown command.");
                 continue;
