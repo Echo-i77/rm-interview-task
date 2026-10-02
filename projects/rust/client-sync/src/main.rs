@@ -58,17 +58,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let mut body = Value::Null;
         let (method, path) = match command.as_str() {
             "q" => break,
-            "ping" => ("GET", "/ping"),
-            "list" => ("GET", "/texts"),
-            "logout" => ("DELETE", "/sessions/current"),
+            "ping" => ("GET", "/ping".to_string()),
+            "list" => ("GET", "/texts".to_string()),
+            "logout" => ("DELETE", "/sessions/current".to_string()),
             "register" | "login" => {
                 body = json!({"username": input("username: ")?, "password": rpassword::prompt_password("password: ")?});
                 (
                     "POST",
                     if command == "register" {
-                        "/users"
+                        "/users".to_string()
                     } else {
-                        "/sessions"
+                        "/sessions".to_string()
                     },
                 )
             }
@@ -78,11 +78,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 )?;
                 body = make_echo_body(&text);
 
-                ("POST", "/echo")
-            }
-            "delete-user" | "put" | "get" | "delete" => {
-                println!("This task is not implemented yet.");
-                continue;
+                ("POST", "/echo".to_string())
             }
             _ => {
                 println!("Unknown command.");
@@ -93,13 +89,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             &client,
             &args.url,
             method.parse().unwrap(),
-            path,
+            &path,
             &token,
             if body.is_null() { None } else { Some(&body) },
         );
         match result {
             Ok((status, value)) => {
-                println!("{status} {value}");
+                if (command == "echo" || command == "get" ) && status == 200 {
+                    println!("{status}");
+                    if let Some(received) = value["data"].as_str(){
+                        print!("{received}");
+                        if !received.ends_with("\n"){
+                            println!();
+                        }
+                    }else{
+                        println!("{value}");
+                }
+                }else{
+                    println!("{status} {value}");
+
+                }
                 if command == "login"
                     && status == 200
                     && let Some(next) = value["data"]["token"].as_str()
@@ -109,7 +118,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if status == 401 {
                     println!("Please log in again.");
                 }
-                if status == 401 || (command == "logout" && status == 200) {
+                if status == 401 || (command == "logout" || command == "delete-user") && status == 200 {
                     token.clear();
                 }
             }
