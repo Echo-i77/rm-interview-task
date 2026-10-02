@@ -90,6 +90,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 ("PUT", format!("/texts/{name}"))
             }
+            "get" => {
+                let name = input("name: ")?;
+
+                ("GET", format!("/texts/{name}"))
+            }
+
             _ => {
                 println!("Unknown command.");
                 continue;
@@ -105,19 +111,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
         match result {
             Ok((status, value)) => {
-                if (command == "echo" || command == "get" ) && status == 200 {
+                if (command == "echo" || command == "get") && status == 200 {
                     println!("{status}");
-                    if let Some(received) = value["data"].as_str(){
+                    if let Some(received) = value["data"].as_str() {
                         print!("{received}");
-                        if !received.ends_with("\n"){
+                        if !received.ends_with("\n") {
                             println!();
                         }
-                    }else{
+                    } else {
                         println!("{value}");
-                }
-                }else{
+                    }
+                } else {
                     println!("{status} {value}");
-
                 }
                 if command == "login"
                     && status == 200
@@ -128,7 +133,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if status == 401 {
                     println!("Please log in again.");
                 }
-                if status == 401 || (command == "logout" || command == "delete-user") && status == 200 {
+                if status == 401
+                    || (command == "logout" || command == "delete-user") && status == 200
+                {
                     token.clear();
                 }
             }
