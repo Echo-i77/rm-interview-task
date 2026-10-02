@@ -95,7 +95,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 ("GET", format!("/texts/{name}"))
             }
+            "delete" => {
+                let name = input("name: ")?;
 
+                ("DELETE", format!("/texts/{name}"))
+            }
+            "delete-user" => {
+                ("DELETE", "/users/me".to_string())
+            }
             _ => {
                 println!("Unknown command.");
                 continue;
