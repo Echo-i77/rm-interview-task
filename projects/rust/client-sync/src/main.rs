@@ -100,9 +100,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 ("DELETE", format!("/texts/{name}"))
             }
-            "delete-user" => {
-                ("DELETE", "/users/me".to_string())
-            }
+            "delete-user" => ("DELETE", "/users/me".to_string()),
             _ => {
                 println!("Unknown command.");
                 continue;

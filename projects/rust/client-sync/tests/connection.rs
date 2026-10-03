@@ -192,3 +192,45 @@ fn echo_text_round_trips_over_http() {
 
     peer.join().unwrap();
 }
+
+#[test]
+fn preserves_status_when_response_body_is_empty() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let url = format!("http://{}", listener.local_addr().unwrap());
+
+    let peer = std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+
+        let mut reader = BufReader::new(stream.try_clone().unwrap());
+
+        loop {
+            let mut line = String::new();
+
+            assert!(reader.read_line(&mut line).unwrap() > 0);
+
+            if line == "\r\n" {
+                break;
+            }
+        }
+        stream
+            .write_all(
+                b"HTTP/1.1 404 Not Found\r\n\
+                  Content-Length: 0\r\n\
+                  Connection: close\r\n\
+                  \r\n",
+            )
+            .unwrap();
+    });
+
+    let client = Client::builder()
+        .no_proxy()
+        .timeout(Duration::from_secs(3))
+        .build()
+        .unwrap();
+
+    let result = exchange(&client, &url, Method::GET, "/missing", "", None).unwrap();
+
+    assert_eq!(result.0, 404);
+
+    peer.join().unwrap();
+}
