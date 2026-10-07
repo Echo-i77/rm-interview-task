@@ -325,3 +325,83 @@ fn deleting_missing_text_returns_404() {
         404
     );
 }
+#[test]
+fn user_logout_deletes_account_and_invalidates_token() {
+    let service = Service::default();
+
+    let account = json!({
+        "username": "alice",
+        "password": "password1"
+    });
+
+    assert_eq!(service.handle("POST", "/users", &account, "").0, 201);
+
+    let login = service.handle("POST", "/sessions", &account, "").1;
+
+    let token = format!("Bearer {}", login["data"]["token"].as_str().unwrap());
+
+    assert_eq!(
+        service
+            .handle(
+                "PUT",
+                "/texts/note",
+                &json!({
+                    "text":"hello"
+                }),
+                &token
+            )
+            .0,
+        200
+    );
+
+    assert_eq!(
+        service
+            .handle("DELETE", "/users/me", &Value::Null, &token)
+            .0,
+        200
+    );
+
+    assert_eq!(service.handle("GET", "/texts", &Value::Null, &token).0, 401);
+}
+#[test]
+fn re_register_after_delete_starts_empty() {
+    let service = Service::default();
+
+    let account = json!({
+        "username":"alice",
+        "password":"password1"
+    });
+
+    service.handle("POST", "/users", &account, "");
+
+    let login = service.handle("POST", "/sessions", &account, "").1;
+
+    let token = format!("Bearer {}", login["data"]["token"].as_str().unwrap());
+
+    service.handle(
+        "PUT",
+        "/texts/note",
+        &json!({
+            "text":"old data"
+        }),
+        &token,
+    );
+
+    service.handle("DELETE", "/users/me", &Value::Null, &token);
+
+    assert_eq!(service.handle("POST", "/users", &account, "").0, 201);
+
+    let login = service.handle("POST", "/sessions", &account, "").1;
+
+    let new_token = format!("Bearer {}", login["data"]["token"].as_str().unwrap());
+
+    assert_eq!(
+        service.handle("GET", "/texts", &Value::Null, &new_token),
+        (
+            200,
+            json!({
+                "data":[]
+            })
+        )
+    );
+}

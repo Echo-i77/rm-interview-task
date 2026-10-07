@@ -48,13 +48,57 @@ fn http_account_lifecycle() {
     assert_eq!(
         client
             .get("/texts")
-            .header(Header::new("Authorization", authorization))
+            .header(Header::new("Authorization", authorization.clone()))
             .dispatch()
             .status(),
         Status::Unauthorized
     );
 }
 
+#[test]
+fn http_delete_user() {
+    let client = Client::tracked(create_app()).unwrap();
+
+    let account = json!({
+        "username":"alice",
+        "password":"password1"
+    })
+    .to_string();
+
+    client
+        .post("/users")
+        .header(ContentType::JSON)
+        .body(&account)
+        .dispatch();
+
+    let login = client
+        .post("/sessions")
+        .header(ContentType::JSON)
+        .body(&account)
+        .dispatch()
+        .into_json::<Value>()
+        .unwrap();
+
+    let authorization = format!("Bearer {}", login["data"]["token"].as_str().unwrap());
+
+    assert_eq!(
+        client
+            .delete("/users/me")
+            .header(Header::new("Authorization", authorization.clone()))
+            .dispatch()
+            .status(),
+        Status::Ok
+    );
+
+    assert_eq!(
+        client
+            .get("/texts")
+            .header(Header::new("Authorization", authorization))
+            .dispatch()
+            .status(),
+        Status::Unauthorized
+    );
+}
 #[test]
 fn http_input_and_routing() {
     let client = Client::tracked(create_app()).unwrap();
