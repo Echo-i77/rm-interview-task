@@ -94,3 +94,161 @@ fn echo_rejects_extra_fields() {
         400
     );
 }
+#[test]
+fn text_upload_creates_and_overwrites() {
+    let service = Service::default();
+
+    let account = json!({
+        "username": "alice",
+        "password": "password1"
+    });
+
+    assert_eq!(service.handle("POST", "/users", &account, "").0, 201);
+
+    let login = service.handle("POST", "/sessions", &account, "").1;
+
+    let token = format!("Bearer {}", login["data"]["token"].as_str().unwrap());
+
+    assert_eq!(
+        service
+            .handle(
+                "PUT",
+                "/texts/note",
+                &json!({
+                    "text":"hello"
+                }),
+                &token
+            )
+            .0,
+        200
+    );
+
+    assert_eq!(
+        service
+            .handle(
+                "PUT",
+                "/texts/note",
+                &json!({
+                    "text":"world"
+                }),
+                &token
+            )
+            .0,
+        200
+    );
+
+    assert_eq!(
+        service.handle("GET", "/texts", &Value::Null, &token).1,
+        json!({
+            "data":["note"]
+        })
+    );
+}
+#[test]
+fn text_upload_requires_login() {
+    let service = Service::default();
+
+    assert_eq!(
+        service
+            .handle(
+                "PUT",
+                "/texts/note",
+                &json!({
+                    "text":"hello"
+                }),
+                "Bearer wrong"
+            )
+            .0,
+        401
+    );
+}
+#[test]
+fn reading_missing_text_returns_404() {
+    let service = Service::default();
+
+    let account = json!({
+        "username":"alice",
+        "password":"password1"
+    });
+
+    service.handle("POST", "/users", &account, "");
+
+    let login = service.handle("POST", "/sessions", &account, "").1;
+
+    let token = format!("Bearer {}", login["data"]["token"].as_str().unwrap());
+
+    assert_eq!(
+        service
+            .handle("GET", "/texts/not_exist", &Value::Null, &token)
+            .0,
+        404
+    );
+}
+#[test]
+fn users_have_separate_texts() {
+    let service = Service::default();
+
+    let alice = json!({
+        "username":"alice",
+        "password":"password1"
+    });
+
+    let bob = json!({
+        "username":"bob",
+        "password":"password1"
+    });
+
+    service.handle("POST", "/users", &alice, "");
+
+    service.handle("POST", "/users", &bob, "");
+
+    let alice_token = {
+        let login = service.handle("POST", "/sessions", &alice, "").1;
+
+        format!("Bearer {}", login["data"]["token"].as_str().unwrap())
+    };
+
+    let bob_token = {
+        let login = service.handle("POST", "/sessions", &bob, "").1;
+
+        format!("Bearer {}", login["data"]["token"].as_str().unwrap())
+    };
+
+    service.handle(
+        "PUT",
+        "/texts/note",
+        &json!({
+            "text":"alice"
+        }),
+        &alice_token,
+    );
+
+    service.handle(
+        "PUT",
+        "/texts/note",
+        &json!({
+            "text":"bob"
+        }),
+        &bob_token,
+    );
+
+    assert_eq!(
+        service.handle("GET", "/texts/note", &Value::Null, &alice_token),
+        (
+            200,
+            json!({
+                "data":"alice"
+            })
+        )
+    );
+
+    assert_eq!(
+        service.handle("GET", "/texts/note", &Value::Null, &bob_token),
+        (
+            200,
+            json!({
+                "data":"bob"
+            })
+        )
+    );
+}

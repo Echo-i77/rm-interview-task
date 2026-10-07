@@ -15,20 +15,33 @@ pub const ROUTES: &[(&str, &str)] = &[
     ("DELETE", "/sessions/current"),
     ("GET", "/texts"),
     ("POST", "/echo"),
+    ("PUT", "/texts/{name}"),
+    ("GET", "/texts/{name}"),
 ];
 
 pub fn route_error(method: &str, path: &str) -> Option<u16> {
-    match ROUTES.iter().find(|(_, route)| {
+    let route_exists = ROUTES.iter().any(|(_, route)| {
         if *route == "/texts/{name}" {
             path.starts_with("/texts/")
         } else {
             *route == path
         }
-    }) {
-        None => Some(404),
-        Some((allowed, _)) if *allowed != method => Some(405),
-        Some(_) => None,
+    });
+
+    if !route_exists {
+        return Some(404);
     }
+
+    let method_exists = ROUTES.iter().any(|(allowed, route)| {
+        *allowed == method
+            && if *route == "/texts/{name}" {
+                path.starts_with("/texts/")
+            } else {
+                *route == path
+            }
+    });
+
+    if !method_exists { Some(405) } else { None }
 }
 
 pub struct User {
@@ -160,7 +173,8 @@ impl Service {
             // Later server task: record a deadline and include expires_in.
             return (200, json!({"data": {"token": token}}));
         }
-        let protected = matches!(path, "/texts" | "/sessions/current");
+        let protected =
+            matches!(path, "/texts" | "/sessions/current") || path.starts_with("/texts/");
         if protected {
             let token = authorization.strip_prefix("Bearer ").unwrap_or("");
             let mut users = self.users.lock().unwrap();
@@ -179,6 +193,44 @@ impl Service {
             }
             if method == "GET" && path == "/texts" {
                 return (200, json!({"data": user.texts.keys().collect::<Vec<_>>()}));
+            }
+            if method == "PUT" && path.starts_with("/texts/") {
+                let text_name = path.strip_prefix("/texts/").unwrap();
+
+                let Some(text) = body.get("text").and_then(Value::as_str) else {
+                    return error(400, "Expected text");
+                };
+
+                if body.as_object().map(|v| v.len()) != Some(1) {
+                    return error(400, "Unexpected fields");
+                }
+
+                user.texts.insert(text_name.to_string(), text.to_string());
+
+                return (
+                    200,
+                    json!({
+                                "data": null
+                    }),
+                );
+            }
+            if method == "GET" && path.starts_with("/texts/") {
+                let text_name = path.strip_prefix("/texts/").unwrap();
+
+                if !valid_name(text_name, 32) {
+                    return error(400, "Invalid text name");
+                }
+
+                let Some(text) = user.texts.get(text_name) else {
+                    return error(404, "Text not found");
+                };
+
+                return (
+                    200,
+                    json!({
+                        "data": text
+                    }),
+                );
             }
         }
         error(404, "Not found")

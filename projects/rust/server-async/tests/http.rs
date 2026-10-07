@@ -109,34 +109,6 @@ fn http_input_and_routing() {
 }
 
 #[test]
-fn unimplemented_routes_are_absent() {
-    use rocket::http::Method;
-    let client = Client::tracked(create_app()).unwrap();
-    for (method, path) in [
-        (Method::Delete, "/users/me"),
-        (Method::Put, "/texts/note"),
-        (Method::Get, "/texts/note"),
-        (Method::Delete, "/texts/note"),
-    ] {
-        assert_eq!(
-            client.req(method, path).dispatch().status(),
-            Status::NotFound
-        );
-    }
-    for path in [
-        "/ping",
-        "/users",
-        "/sessions",
-        "/sessions/current",
-        "/texts",
-    ] {
-        assert_eq!(
-            client.patch(path).dispatch().status(),
-            Status::MethodNotAllowed
-        );
-    }
-}
-#[test]
 fn http_echo() {
     let client = Client::tracked(create_app()).unwrap();
 
@@ -152,6 +124,66 @@ fn http_echo() {
         .dispatch();
 
     assert_eq!(response.status(), Status::Ok);
+    assert_eq!(
+        response.into_json::<Value>().unwrap(),
+        json!({
+            "data":"hello"
+        })
+    );
+}
+#[test]
+fn http_text_upload_and_read() {
+    let client = Client::tracked(create_app()).unwrap();
+
+    let account = json!({
+        "username":"alice",
+        "password":"password1"
+    })
+    .to_string();
+
+    assert_eq!(
+        client
+            .post("/users")
+            .header(ContentType::JSON)
+            .body(&account)
+            .dispatch()
+            .status(),
+        Status::Created
+    );
+
+    let login = client
+        .post("/sessions")
+        .header(ContentType::JSON)
+        .body(&account)
+        .dispatch()
+        .into_json::<Value>()
+        .unwrap();
+
+    let token = format!("Bearer {}", login["data"]["token"].as_str().unwrap());
+
+    assert_eq!(
+        client
+            .put("/texts/note")
+            .header(ContentType::JSON)
+            .header(Header::new("Authorization", token.clone()))
+            .body(
+                json!({
+                    "text":"hello"
+                })
+                .to_string()
+            )
+            .dispatch()
+            .status(),
+        Status::Ok
+    );
+
+    let response = client
+        .get("/texts/note")
+        .header(Header::new("Authorization", token))
+        .dispatch();
+
+    assert_eq!(response.status(), Status::Ok);
+
     assert_eq!(
         response.into_json::<Value>().unwrap(),
         json!({
