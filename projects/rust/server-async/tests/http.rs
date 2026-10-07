@@ -2,10 +2,11 @@ use rm_server_async::http::create_app;
 use rocket::http::{ContentType, Header, Status};
 use rocket::local::blocking::Client;
 use serde_json::{Value, json};
+use std::time::Duration;
 
 #[test]
 fn http_account_lifecycle() {
-    let client = Client::tracked(create_app()).unwrap();
+    let client = Client::tracked(create_app(Duration::from_secs(300))).unwrap();
     let ping = client.get("/ping").dispatch();
     assert_eq!(ping.status(), Status::Ok);
     assert_eq!(ping.into_json::<Value>().unwrap(), json!({"data": "pong"}));
@@ -57,7 +58,7 @@ fn http_account_lifecycle() {
 
 #[test]
 fn http_delete_user() {
-    let client = Client::tracked(create_app()).unwrap();
+    let client = Client::tracked(create_app(Duration::from_secs(300))).unwrap();
 
     let account = json!({
         "username":"alice",
@@ -101,7 +102,7 @@ fn http_delete_user() {
 }
 #[test]
 fn http_input_and_routing() {
-    let client = Client::tracked(create_app()).unwrap();
+    let client = Client::tracked(create_app(Duration::from_secs(300))).unwrap();
     for body in [b"not JSON".to_vec(), vec![0xff], b"NaN".to_vec()] {
         assert_eq!(
             client
@@ -154,7 +155,7 @@ fn http_input_and_routing() {
 
 #[test]
 fn http_echo() {
-    let client = Client::tracked(create_app()).unwrap();
+    let client = Client::tracked(create_app(Duration::from_secs(300))).unwrap();
 
     let response = client
         .post("/echo")
@@ -177,7 +178,7 @@ fn http_echo() {
 }
 #[test]
 fn http_text_upload_and_read() {
-    let client = Client::tracked(create_app()).unwrap();
+    let client = Client::tracked(create_app(Duration::from_secs(300))).unwrap();
 
     let account = json!({
         "username":"alice",
@@ -233,5 +234,46 @@ fn http_text_upload_and_read() {
         json!({
             "data":"hello"
         })
+    );
+}
+#[test]
+fn http_token_expires() {
+    let client = Client::tracked(create_app(Duration::from_secs(1))).unwrap();
+
+    let account = json!({
+        "username":"alice",
+        "password":"password1"
+    })
+    .to_string();
+
+    assert_eq!(
+        client
+            .post("/users")
+            .header(ContentType::JSON)
+            .body(&account)
+            .dispatch()
+            .status(),
+        Status::Created
+    );
+
+    let login = client
+        .post("/sessions")
+        .header(ContentType::JSON)
+        .body(&account)
+        .dispatch()
+        .into_json::<Value>()
+        .unwrap();
+
+    let authorization = format!("Bearer {}", login["data"]["token"].as_str().unwrap());
+
+    std::thread::sleep(Duration::from_secs(2));
+
+    assert_eq!(
+        client
+            .get("/texts")
+            .header(Header::new("Authorization", authorization))
+            .dispatch()
+            .status(),
+        Status::Unauthorized
     );
 }

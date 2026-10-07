@@ -7,7 +7,7 @@ use rocket::serde::json::Json;
 use rocket::{Build, Data, Orbit, Request, Response, Rocket, Route};
 use serde_json::Value;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 struct ConsoleOutput;
 
@@ -126,8 +126,8 @@ impl Handler for Dispatch {
     }
 }
 
-pub fn create_app() -> Rocket<Build> {
-    let dispatch = Dispatch(Arc::new(Service::default()));
+pub fn create_app(token_ttl: Duration) -> Rocket<Build> {
+    let dispatch = Dispatch(Arc::new(Service::new(token_ttl)));
     let routes: Vec<_> = [
         Method::Get,
         Method::Post,

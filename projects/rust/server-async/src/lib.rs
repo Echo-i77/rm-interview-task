@@ -6,6 +6,7 @@ use serde_json::{Value, json};
 use sha2::Sha256;
 use std::collections::BTreeMap;
 use std::sync::Mutex;
+use std::time::{Duration, Instant};
 use subtle::ConstantTimeEq;
 
 pub const ROUTES: &[(&str, &str)] = &[
@@ -51,11 +52,29 @@ pub struct User {
     pub digest: [u8; 32],
     pub token: Option<String>,
     pub texts: BTreeMap<String, String>,
+    pub expires_at: Option<std::time::Instant>,
 }
 
-#[derive(Default)]
 pub struct Service {
     pub users: Mutex<BTreeMap<String, User>>,
+    pub token_ttl: Duration,
+}
+
+impl Service {
+    pub fn new(token_ttl: Duration) -> Self {
+        Self {
+            users: Mutex::new(BTreeMap::new()),
+            token_ttl,
+        }
+    }
+}
+impl Default for Service {
+    fn default() -> Self {
+        Self {
+            users: Mutex::new(BTreeMap::new()),
+            token_ttl: Duration::from_secs(300),
+        }
+    }
 }
 
 pub fn error(status: u16, message: &str) -> (u16, Value) {
@@ -150,6 +169,7 @@ impl Service {
                         salt,
                         digest,
                         token: None,
+                        expires_at: None,
                         texts: BTreeMap::new(),
                     },
                 );
@@ -172,8 +192,14 @@ impl Service {
             }
             let token = new_token();
             user.token = Some(token.clone());
+            user.expires_at = Some(Instant::now() + self.token_ttl);
 
-            return (200, json!({"data": {"token": token}}));
+            return (
+                200,
+                json!({"data": {"token": token,
+                "expires_in": self.token_ttl.as_secs()
+                }}),
+            );
         }
         let protected = matches!(path, "/texts" | "/sessions/current" | "/users/me")
             || path.starts_with("/texts/");
@@ -182,7 +208,11 @@ impl Service {
             let mut users = self.users.lock().unwrap();
             let name = users
                 .iter()
-                .find(|(_, user)| !token.is_empty() && user.token.as_deref() == Some(token))
+                .find(|(_, user)| {
+                    !token.is_empty()
+                        && user.token.as_deref() == Some(token)
+                        && user.expires_at.is_some_and(|time| Instant::now() < time)
+                })
                 .map(|(name, _)| name.clone());
             let Some(name) = name else {
                 return error(401, "Login required");
@@ -202,6 +232,7 @@ impl Service {
 
             if method == "DELETE" && path == "/sessions/current" {
                 user.token = None;
+                user.expires_at = None;
                 return (200, json!({"data": null}));
             }
             if method == "GET" && path == "/texts" {
