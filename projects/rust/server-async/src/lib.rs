@@ -18,7 +18,13 @@ pub const ROUTES: &[(&str, &str)] = &[
 ];
 
 pub fn route_error(method: &str, path: &str) -> Option<u16> {
-    match ROUTES.iter().find(|(_, route)| *route == path) {
+    match ROUTES.iter().find(|(_, route)| {
+        if *route == "/texts/{name}" {
+            path.starts_with("/texts/")
+        } else {
+            *route == path
+        }
+    }) {
         None => Some(404),
         Some((allowed, _)) if *allowed != method => Some(405),
         Some(_) => None,
@@ -83,6 +89,14 @@ impl Service {
             return (200, json!({"data": "pong"}));
         }
         if method == "POST" && path == "/echo" {
+            let Some(object) = body.as_object() else {
+                return error(400, "Expected object");
+            };
+
+            if object.len() != 1 {
+                return error(400, "Unexpected fields");
+            }
+
             let Some(text) = body.get("text").and_then(Value::as_str) else {
                 return error(400, "Expected text");
             };
