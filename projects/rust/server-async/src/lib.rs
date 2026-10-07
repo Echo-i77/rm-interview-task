@@ -17,6 +17,7 @@ pub const ROUTES: &[(&str, &str)] = &[
     ("POST", "/echo"),
     ("PUT", "/texts/{name}"),
     ("GET", "/texts/{name}"),
+    ("DELETE", "/texts/{name}"),
 ];
 
 pub fn route_error(method: &str, path: &str) -> Option<u16> {
@@ -229,6 +230,24 @@ impl Service {
                     200,
                     json!({
                         "data": text
+                    }),
+                );
+            }
+            if method == "DELETE" && path.starts_with("/texts/") {
+                let text_name = path.strip_prefix("/texts/").unwrap();
+
+                if !valid_name(text_name, 32) {
+                    return error(400, "Invalid text name");
+                }
+
+                if user.texts.remove(text_name).is_none() {
+                    return error(404, "Text not found");
+                }
+
+                return (
+                    200,
+                    json!({
+                        "data": null
                     }),
                 );
             }

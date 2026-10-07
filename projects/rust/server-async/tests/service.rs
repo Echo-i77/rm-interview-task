@@ -252,3 +252,76 @@ fn users_have_separate_texts() {
         )
     );
 }
+#[test]
+fn text_delete_removes_text() {
+    let service = Service::default();
+
+    let account = json!({
+        "username":"alice",
+        "password":"password1"
+    });
+
+    service.handle("POST", "/users", &account, "");
+
+    let login = service.handle("POST", "/sessions", &account, "").1;
+
+    let token = format!("Bearer {}", login["data"]["token"].as_str().unwrap());
+
+    assert_eq!(
+        service
+            .handle(
+                "PUT",
+                "/texts/note",
+                &json!({
+                    "text":"hello"
+                }),
+                &token
+            )
+            .0,
+        200
+    );
+
+    assert_eq!(
+        service
+            .handle("DELETE", "/texts/note", &Value::Null, &token)
+            .0,
+        200
+    );
+
+    assert_eq!(
+        service.handle("GET", "/texts/note", &Value::Null, &token).0,
+        404
+    );
+
+    assert_eq!(
+        service.handle("GET", "/texts", &Value::Null, &token),
+        (
+            200,
+            json!({
+                "data":[]
+            })
+        )
+    );
+}
+#[test]
+fn deleting_missing_text_returns_404() {
+    let service = Service::default();
+
+    let account = json!({
+        "username":"alice",
+        "password":"password1"
+    });
+
+    service.handle("POST", "/users", &account, "");
+
+    let login = service.handle("POST", "/sessions", &account, "").1;
+
+    let token = format!("Bearer {}", login["data"]["token"].as_str().unwrap());
+
+    assert_eq!(
+        service
+            .handle("DELETE", "/texts/note", &Value::Null, &token)
+            .0,
+        404
+    );
+}
